@@ -1,0 +1,179 @@
+*hlswitch.txt*  A light switch for syntax highlighting
+
+Author:   G.A. Jazali <dev@jazali.org>
+License:  MIT
+
+==============================================================================
+CONTENTS                                                   *hlswitch-contents*
+
+    1. Introduction ........................ |hlswitch-introduction|
+    2. Requirements ........................ |hlswitch-requirements|
+    3. Commands ............................ |hlswitch-commands|
+    4. Options ............................. |hlswitch-options|
+    5. Lua API ............................. |hlswitch-api|
+    6. Statusline .......................... |hlswitch-statusline|
+
+==============================================================================
+1. INTRODUCTION                                        *hlswitch-introduction*
+
+HlSwitch turns syntax highlighting into a per-buffer setting with three
+positions:
+
+    on          everything is highlighted
+    off         nothing is highlighted
+    comment     comments are highlighted, nothing else is
+
+The mode belongs to the buffer, so one file can be read plainly while the
+next is fully coloured. The mode is reapplied whenever another plugin turns
+highlighting on or off.
+
+==============================================================================
+2. REQUIREMENTS                                        *hlswitch-requirements*
+
+Neovim 0.10 or newer. Developed and tested against 0.11.
+
+Treesitter is optional. If a Treesitter parser exists, HlSwitch will drive it.
+
+==============================================================================
+3. COMMANDS                                                *hlswitch-commands*
+
+                                                                 *:HlSwitchOn*
+:HlSwitchOn             Highlight everything in the current buffer.
+
+                                                                *:HlSwitchOff*
+:HlSwitchOff            Highlight nothing in the current buffer.
+
+                                                            *:HlSwitchComment*
+:HlSwitchComment        Highlight comments in the current buffer and nothing
+                        else.
+
+                                                                   *:HlSwitch*
+:HlSwitch {mode}        Set the current buffer to {mode}, one of `off`, `on`
+                        or `comment`. Completion is available.
+
+                                                               *:HlSwitchTSOn*
+:HlSwitchTSOn           Start the treesitter highlighter on the current
+                        buffer without changing its mode.
+
+                                                              *:HlSwitchTSOff*
+:HlSwitchTSOff          Stop the treesitter highlighter on the current buffer
+                        without changing its mode.
+
+A mode set by a command sticks: filetype detection afterwards will not
+override it, unlike a mode computed from the options.
+
+==============================================================================
+4. OPTIONS                                                  *hlswitch-options*
+
+Options can be passed to |hlswitch.setup()| or set in |g:hlswitch|. Mode
+options accept numbers (`0`, `1`, `2`) or names (`'off'`, `'on'`,
+`'comment'`).
+
+                                                                  *g:hlswitch*
+Read at |VimEnter| if `setup()` was not called. Can go anywhere in a Vim
+script configuration: >vim
+
+    let g:hlswitch = #{
+      \ default: 'on',
+      \ default_by_filetype: #{ checkhealth: 'on', log: 'off' },
+      \ no_filetype_default: 'off',
+    \ }
+<
+                                                          *hlswitch-o-default*
+default ~
+        Mode for buffers not listed in `default_by_filetype`.
+        Default: `1` (on)
+
+                                              *hlswitch-o-default_by_filetype*
+default_by_filetype ~
+        Per-filetype mode overrides.
+        Default: `{}`
+
+                                              *hlswitch-o-no_filetype_default*
+no_filetype_default ~
+        Mode for listed buffers with no filetype. Unlisted buffers
+        (previews, scratch buffers) use `default` instead.
+        Default: `0` (off)
+
+                                                       *hlswitch-o-treesitter*
+treesitter ~
+        Whether HlSwitch manages the treesitter highlighter. When false,
+        only the regex syntax engine is managed.
+        Default: `true`
+
+                                                      *hlswitch-o-keep_groups*
+keep_groups ~
+        Lua patterns for highlight groups that should keep their colour in
+        comment mode, beyond those HlSwitch keeps automatically: >lua
+
+            keep_groups = { '^@markup%.', 'Docstring$' }
+<
+        Default: `{}`
+
+                                             *hlswitch-o-manage_syntax_option*
+manage_syntax_option ~
+        Whether HlSwitch runs |:syntax-manual| at startup to prevent
+        filetype detection from re-enabling highlighting. Disable only if
+        another plugin manages this.
+        Default: `true`
+
+==============================================================================
+5. LUA API                                                      *hlswitch-api*
+
+                                                            *hlswitch.setup()*
+require('hlswitch').setup({opts})
+        Applies {opts} and sets up autocommands. Optional: HlSwitch starts
+        on defaults and reads |g:hlswitch| at |VimEnter|. Calling with
+        options marks them as configured, so |g:hlswitch| is then ignored.
+        Safe to call more than once.
+
+                                                              *hlswitch.set()*
+require('hlswitch').set({mode}, {opts})
+        Sets a buffer's mode. {opts} may include `buf` for a specific
+        buffer and `explicit = false` to allow filetype detection to
+        override. Returns false with an error if {mode} is invalid.
+
+                                                              *hlswitch.get()*
+require('hlswitch').get({buf})
+        The numeric mode of {buf} (default: current buffer). Nil if unset.
+
+                                                           *hlswitch.status()*
+require('hlswitch').status({buf})
+        The mode of {buf} as a string: `'off'`, `'on'`, `'comment'`, or
+        `''`. See |hlswitch-statusline|.
+
+                                                          *hlswitch.refresh()*
+require('hlswitch').refresh({buf})
+        Reapplies a buffer's mode, computing the default if unset.
+
+                                                      *hlswitch.refresh_all()*
+require('hlswitch').refresh_all({redefault})
+        Reapplies modes on all loaded buffers. With {redefault}, recomputes
+        defaults for buffers whose mode was not set explicitly.
+
+                                                           *hlswitch.rescan()*
+require('hlswitch').rescan()
+        Rebuilds comment mode's highlight group data. Runs automatically
+        on colourscheme changes.
+
+                                                    *hlswitch.treesitter_on()*
+                                                   *hlswitch.treesitter_off()*
+require('hlswitch').treesitter_on()
+require('hlswitch').treesitter_off()
+        Start or stop treesitter highlighting on the current buffer without
+        changing its mode. Used by |:HlSwitchTSOn| and |:HlSwitchTSOff|.
+
+==============================================================================
+6. STATUSLINE                                            *hlswitch-statusline*
+
+|hlswitch.status()| returns the current mode by name. With lualine: >lua
+
+    sections = {
+      lualine_x = { function() return require('hlswitch').status() end },
+    }
+<
+The mode is also in `b:hlswitch_mode` as a number, for Vim script: >vim
+
+    echo b:hlswitch_mode
+
+ vim:tw=78:ts=8:noet:ft=help:norl:
